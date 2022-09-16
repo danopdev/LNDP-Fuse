@@ -5,8 +5,6 @@ For the Android client checkout [LNDP-Android](https://github.com/danopdev/LNDP-
 
 ## Install
 
-> **_NOTE:_** Tested with node 14 & 16.
-
 Clone this repository:
 ```
 git clone git@github.com:danopdev/LNDP-Fuse.git
