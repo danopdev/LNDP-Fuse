@@ -34,7 +34,8 @@ class Cache:
                 return None
             return value
         except Exception as e:
-            print(e)
+            #print(e)
+            pass
         return None
 
     def set(self, key, value):
@@ -85,7 +86,7 @@ class ZeroConfListener(ServiceListener):
         else:
             lndpServers[serverName] = LNDPServerInfo(serverName, port, addressStr, ssl, now())
 
-        print(f"Add / Update: {lndpServers[serverName]}")
+        #print(f"Add / Update: {lndpServers[serverName]}")
 
 
     def removeServer( self, name: str ) -> None:
@@ -93,7 +94,7 @@ class ZeroConfListener(ServiceListener):
         serverName = self.getServerName( name )
         if serverName in lndpServers:
             del lndpServers[serverName]
-            print(f"Remove: {serverName}")
+            #print(f"Remove: {serverName}")
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         #self.addServer( zc, type_, name ) #there will always be an update_service
@@ -109,7 +110,7 @@ class ZeroConfListener(ServiceListener):
 
 class LNDPFuse(Operations, LoggingMixIn):
     FILE_DESCRIPTOR_MAX = 32
-    CACHE_TIMEOUT = 10
+    CACHE_TIMEOUT = 60
 
 
     def __init__(self):
@@ -207,7 +208,7 @@ class LNDPFuse(Operations, LoggingMixIn):
         try:
             return self._remoteCall( server, request, path, extraParams ).content
         except Exception as e:
-            print(e)
+            #print(e)
             self._raiseFileNotFound()
 
 
@@ -215,7 +216,7 @@ class LNDPFuse(Operations, LoggingMixIn):
         try:
             return self._remoteCall( server, request, path, extraParams, useGet, uploadBlock ).json()
         except Exception as e:
-            print(e)
+            #print(e)
             self._raiseFileNotFound()
 
 
@@ -236,7 +237,7 @@ class LNDPFuse(Operations, LoggingMixIn):
 
 
     def _lndpReadDocument(self, server: LNDPServerInfo, path: str, offset: int, size: int):
-        print(f"[_lndpReadDocument] size:{size}, offset:{offset}")
+        #print(f"[_lndpReadDocument] size:{size}, offset:{offset}")
         return self._getBinary( server, 'documentRead', path, { 'offset': offset, 'size': size } )
 
 
@@ -248,13 +249,13 @@ class LNDPFuse(Operations, LoggingMixIn):
     # ==================
     #chmod
     def chmod(self, path, mode):
-        print(f"[chmod] path: {path}, mode: {mode}")
+        #print(f"[chmod] path: {path}, mode: {mode}")
         return 0
 
 
     #chown
     def chown(self, path, uid, gid):
-        print(f"[chown] path: {path}, uid: {uid}, gid: {gid}")
+        #print(f"[chown] path: {path}, uid: {uid}, gid: {gid}")
         return 0
 
 
@@ -285,8 +286,7 @@ class LNDPFuse(Operations, LoggingMixIn):
         }
 
 
-    def _getattrPathReal(self, server: LNDPServerInfo, path: str, params):
-        json = self._lndpQueryDocument( server, path )[0]
+    def _getattrPathRealFromJsonItem(self, json):
         time = int(json['date']) // 1000
         mode = 0o555 if json['isreadonly'] else 0o777
         mode += 0o40000 if json['isdir'] else 0o100000
@@ -303,6 +303,11 @@ class LNDPFuse(Operations, LoggingMixIn):
         }
 
 
+    def _getattrPathReal(self, server: LNDPServerInfo, path: str, params):
+        json = self._lndpQueryDocument( server, path )[0]
+        return self._getattrPathRealFromJsonItem(json)
+
+
     def _getattrPath(self, server: LNDPServerInfo, path: str, params):
         return self.cache.getOrUpdate(
             ('getattr', server.name, path),
@@ -311,7 +316,7 @@ class LNDPFuse(Operations, LoggingMixIn):
 
 
     def getattr(self, path, fh=None):
-        print(f"[getattr] path: {path}, fh: {fh}")
+        #print(f"[getattr] path: {path}, fh: {fh}")
         return self._splitPath(
             path,
             self._getattrRoot,
@@ -333,13 +338,23 @@ class LNDPFuse(Operations, LoggingMixIn):
         return self._readdirPath(server, '/', params)
 
 
-    def _readdirPath(self, server: LNDPServerInfo, path: str, params):
+    def _readdirPathReal(self, server: LNDPServerInfo, path: str, params):
         json = self._lndpQueryChildDocuments(server, path)
+        
+        for item in json:
+            self.cache.set(('getattr', server.name, f"path/{item['name']}"), self._getattrPathRealFromJsonItem(item) )
+
         return [ item['name'] for item in json ]
 
 
+    def _readdirPath(self, server: LNDPServerInfo, path: str, params):
+        return self.cache.getOrUpdate(
+            ('readdir', server.name, path),
+            lambda: self._readdirPathReal(server, path, params)
+        )
+
     def readdir(self, path, fh):
-        print(f"[readdir] path: {path}, fh: {fh}")
+        #print(f"[readdir] path: {path}, fh: {fh}")
 
         return self._splitPath(
             path,
@@ -352,7 +367,7 @@ class LNDPFuse(Operations, LoggingMixIn):
 
     #rmdir
     # def rmdir(self, path):
-    #     print(f"[rmdir] path: {path}")
+    #     #print(f"[rmdir] path: {path}")
     #     return None
 
 
@@ -394,13 +409,13 @@ class LNDPFuse(Operations, LoggingMixIn):
 
     #open
     def _openPath(self, server: LNDPServerInfo, path: str, flags):
-        print(f"[_openPath] path={path}")
+        #print(f"[_openPath] path={path}")
         self._lndpQueryDocument(server, path)
         return self._descriptorOpen(server, path)
 
 
     def open(self, path, flags):
-        print(f"[open] path: {path}, flags: {flags}")
+        #print(f"[open] path: {path}, flags: {flags}")
         return self._splitPath(
             path,
             None,
@@ -418,7 +433,7 @@ class LNDPFuse(Operations, LoggingMixIn):
 
 
     def create(self, path, mode, fi=None):
-        print(f"[create] path: {path}, mode: {mode}, fi: {fi}")
+        #print(f"[create] path: {path}, mode: {mode}, fi: {fi}")
         return self._splitPath(
             path,
             None,
@@ -430,40 +445,40 @@ class LNDPFuse(Operations, LoggingMixIn):
 
     #read
     def read(self, path, length, offset, fh):
-        print(f"[read] path: {path}, length: {length}, offset: {offset}, fh: {fh}")
+        #print(f"[read] path: {path}, length: {length}, offset: {offset}, fh: {fh}")
         server, serverPath = self.usedFileDescriptors[fh]
         return self._lndpReadDocument( server, serverPath, offset, length )
 
 
     # #write
     # def write(self, path, buf, offset, fh):
-    #     print(f"[write] path: {path}, length: {len(buf)}, offset: {offset}, fh: {fh}")
+    #     #print(f"[write] path: {path}, length: {len(buf)}, offset: {offset}, fh: {fh}")
     #     server, serverPath = self.usedFileDescriptors[fh]
     #     return self._lndpWriteDocument( server, serverPath, offset, buf )
 
 
     #release
     def release(self, path, fh):
-        print(f"[release] path: {path}, fh: {fh}")
+        #print(f"[release] path: {path}, fh: {fh}")
         self._descriptorClose( fh )
         return 0
 
 
     #flush
     def flush(self, path, fh): #not needed (there is no cache)
-        print(f"[flush] path: {path}, fh: {fh}")
+        #print(f"[flush] path: {path}, fh: {fh}")
         return 0
 
 
     #fsync
     def fsync(self, path, fdatasync, fh): #not needed (there is no cache)
-        print(f"[fsync] path: {path}, fdatasync: {fdatasync}, fh: {fh}")
+        #print(f"[fsync] path: {path}, fdatasync: {fdatasync}, fh: {fh}")
         return 0
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(f"Format: {sys.argv[0]} <mount point> [token]")
+        #print(f"Format: {sys.argv[0]} <mount point> [token]")
         sys.exit(1)
 
     TOKEN = None
