@@ -12,7 +12,7 @@ from xmlrpc.client import Boolean
 import requests
 from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
 from dataclasses import dataclass
-from fusepy import FUSE, FuseOSError, Operations, LoggingMixIn
+from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 from urllib.parse import urlencode
 
 
