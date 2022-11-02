@@ -191,12 +191,16 @@ class LNDPFuse(Operations, LoggingMixIn):
             params = {} if extraParams is None else extraParams.copy()
             params['path'] = path
             url = f"{prefix}://{server.address}:{server.port}/{request}"
+            headers = {}
+
+            if not TOKEN is None:
+                headers["Authorization"] = f"Bearer {TOKEN}"
 
             if useGet:
-                return requests.get(url, params=params, verify=False)
+                return requests.get(url, params=params, headers=headers, verify=False)
 
             files = None if uploadBlock is None else { 'block' : uploadBlock }
-            return requests.post(url, params=params, verify=False, files=files)
+            return requests.post(url, params=params, headers=headers, verify=False, files=files)
 
 
     def _getBinary( self, server: LNDPServerInfo, request: str, path: str, extraParams: dict = None ):
@@ -459,8 +463,12 @@ class LNDPFuse(Operations, LoggingMixIn):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(f"Format: {sys.argv[0]} <mount point>")
+        print(f"Format: {sys.argv[0]} <mount point> [token]")
         sys.exit(1)
+
+    TOKEN = None
+    if len(sys.argv) >= 3:
+        TOKEN = sys.argv[2]
 
     uid = os.getuid()
     gid = os.getgid()
